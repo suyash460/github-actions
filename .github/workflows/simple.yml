@@ -12,17 +12,8 @@ jobs:
         run: |
           node -v
           npm -v
-      - name: python script
-        run: |
-          import platform
-          print(platform.processor())
-        shell: python 
   run-on-window:
-    runs-on: windows:latest
+    runs-on: windows-latest
     steps:
       - name: Directory Powershell
         run: Get-Location
-      - name: Get Location
-        run: pwd
-        shell: bash
-     
