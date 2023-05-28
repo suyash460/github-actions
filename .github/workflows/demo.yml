@@ -16,5 +16,5 @@ jobs:
         run: |
           ls ${{ github.workspace }}
           cd ${{ github.workspace }}
-          ls
+          cat readme.md
       - run: echo "🍏 This job's status is ${{ job.status }}."
