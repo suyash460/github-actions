@@ -19,5 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run build script
-        run: ./.github/scripts/script.sh
+        run: |
+          chmod -v +x script.sh 
+          ./.github/scripts/script.sh
         shell: bash
