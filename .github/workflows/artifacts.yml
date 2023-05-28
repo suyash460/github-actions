@@ -13,3 +13,10 @@ jobs:
         with:
           name: output-log-file
           path: output.log
+  example-job1:
+    name: Run script
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run build script
+        run: ./.github/scripts/build.sh
+        shell: bash
