@@ -1,4 +1,4 @@
-name: End-to-End Artifact Flow
+name: End-to-End Artifact Flow (Replace Reports)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
         description: "Release tag (e.g. 0.0.1)"
         required: true
       path:
-        description: "Download + commit path (e.g. reports)"
+        description: "Reports path"
         required: true
         default: "reports"
 
@@ -25,14 +25,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1️⃣ Create files
+      # 1️⃣ Create new files
       - name: Create files
         run: |
           mkdir -p output
-          echo '{"name":"file3"}' > output/file5.json
-          echo '{"name":"file4"}' > output/file6.json
-          echo "# File 3" > output/file5.md
-          echo "# File 4" > output/file6.md
+          echo '{"name":"file5"}' > output/file3.json
+          echo '{"name":"file6"}' > output/file4.json
+          echo "# File 5" > output/file3.md
+          echo "# File 6" > output/file4.md
 
       # 2️⃣ Upload artifact
       - name: Upload artifacts
@@ -41,39 +41,47 @@ jobs:
           name: my-artifacts
           path: output/*
 
-      # 3️⃣ Download artifact to user-provided path
+      # 3️⃣ Download artifacts to temp folder
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: my-artifacts
-          path: ${{ inputs.path }}
+          path: downloaded
 
-      # Debug
-      - name: List downloaded files
+      # 🔥 4️⃣ FULL REPLACEMENT LOGIC
+      - name: Replace reports folder completely
         run: |
-          echo "📂 Files in ${{ inputs.path }}:"
-          ls -l ${{ inputs.path }}
+          TARGET="${{ inputs.path }}"
 
-      # 4️⃣ Commit to main
-      - name: Commit files to main
+          mkdir -p "$TARGET"
+
+          echo "🧹 Removing old files..."
+          rm -rf "$TARGET"/*
+
+          echo "📥 Copying new files..."
+          cp -r downloaded/* "$TARGET"/
+
+          echo "📂 Final reports content:"
+          ls -l "$TARGET"
+
+      # 5️⃣ Commit changes (includes deletions)
+      - name: Commit to main
         run: |
-          set -e
-
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           git checkout main
 
-          git add ${{ inputs.path }}
+          git add "${{ inputs.path }}"
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
+          if git diff --cached --quiet -- "${{ inputs.path }}"; then
+            echo "No changes in reports"
           else
-            git commit -m "Add artifacts to ${{ inputs.path }}"
+            git commit -m "Replace reports for ${{ inputs.release-tag }}"
             git push origin main
           fi
 
-      # 5️⃣ Upload to release
+      # 6️⃣ Upload to release
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,25 +89,17 @@ jobs:
           TAG="${{ inputs.release-tag }}"
           FILE_PATH="${{ inputs.path }}"
 
-          echo "📦 Uploading files from '$FILE_PATH' to release '$TAG'..."
+          echo "📦 Uploading files to release $TAG..."
 
-          max_retries=3
-          count=1
-          
-          while [ $count -le $max_retries ]; do
-            echo "⬆️ Attempt $count to upload..."
-          
+          for i in 1 2 3; do
             if gh release upload "$TAG" "$FILE_PATH"/* --clobber; then
               echo "✅ Upload successful"
-              break
+              exit 0
             else
-              echo "⚠️ Upload failed (attempt $count)"
-              ((count++))
+              echo "⚠️ Retry $i..."
               sleep 2
             fi
           done
-          
-          if [ $count -gt $max_retries ]; then
-            echo "❌ Upload failed after $max_retries attempts"
-            exit 1
-          fi
+
+          echo "❌ Upload failed"
+          exit 1
