@@ -46,23 +46,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: my-artifacts
-          path: downloaded
+          path: ${{ inputs.path }}
 
       # 🔥 4️⃣ FULL REPLACEMENT LOGIC
-      - name: Replace reports folder completely
-        run: |
-          TARGET="${{ inputs.path }}"
-
-          mkdir -p "$TARGET"
-
-          echo "🧹 Removing old files..."
-          rm -rf "$TARGET"/*
-
-          echo "📥 Copying new files..."
-          cp -r downloaded/* "$TARGET"/
-
-          echo "📂 Final reports content:"
-          ls -l "$TARGET"
+     
 
       # 5️⃣ Commit changes (includes deletions)
       - name: Commit to main
