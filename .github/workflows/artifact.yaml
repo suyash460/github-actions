@@ -1,21 +1,31 @@
-name: Upload Artifacts to Release
+name: End-to-End Artifact Flow
 
 on:
   workflow_dispatch:
+    inputs:
+      release-tag:
+        description: "Release tag (e.g. 0.0.1)"
+        required: true
+      path:
+        description: "Download + commit path (e.g. reports)"
+        required: true
+        default: "reports"
 
 permissions:
   contents: write
 
 jobs:
-  upload:
+  flow:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo
+      # Checkout
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Create sample files
+      # 1️⃣ Create files
       - name: Create files
         run: |
           mkdir -p output
@@ -24,35 +34,62 @@ jobs:
           echo "# File 1" > output/file1.md
           echo "# File 2" > output/file2.md
 
-      # Upload artifact (optional step for testing flow)
+      # 2️⃣ Upload artifact
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: my-artifacts
           path: output/*
 
-      # Download artifact into reports/
+      # 3️⃣ Download artifact to user-provided path
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: my-artifacts
-          path: reports
+          path: ${{ inputs.path }}
 
-      # Debug: check files
-      - name: List files
+      # Debug
+      - name: List downloaded files
         run: |
-          echo "📂 Reports folder:"
-          ls -l reports/
+          echo "📂 Files in ${{ inputs.path }}:"
+          ls -l ${{ inputs.path }}
 
-      # 🚀 Upload to GitHub Release
-      - name: Upload to release
+      # 4️⃣ Commit to main
+      - name: Commit files to main
+        run: |
+          set -e
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git checkout main
+
+          git add ${{ inputs.path }}
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add artifacts to ${{ inputs.path }}"
+            git push origin main
+          fi
+
+      # 5️⃣ Upload to release
+      - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "📦 Uploading files to release 0.0.1..."
+          TAG="${{ inputs.release-tag }}"
+          FILE_PATH="${{ inputs.path }}"
 
-          gh release view 0.0.1 || { echo "❌ Release 0.0.1 not found"; exit 1; }
+          echo "📦 Uploading files from '$FILE_PATH' to release '$TAG'..."
 
-          gh release upload "0.0.1" reports/* --clobber
+          # Check release exists
+          gh release view "$TAG" >/dev/null 2>&1 || {
+            echo "❌ Release '$TAG' not found"
+            exit 1
+          }
+
+          # Upload all files
+          gh release upload "$TAG" "$FILE_PATH"/* --clobber
 
           echo "✅ Upload completed"
