@@ -30,8 +30,8 @@ jobs:
         run: |
           mkdir -p output
           echo '{"name":"file3"}' > output/file3.json
-          echo '{"name":"file3"}' > output/file3.json
-          echo "# File 3" > output/file4.md
+          echo '{"name":"file4"}' > output/file4.json
+          echo "# File 3" > output/file3.md
           echo "# File 4" > output/file4.md
 
       # 2️⃣ Upload artifact
