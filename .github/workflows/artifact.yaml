@@ -1,4 +1,4 @@
-name: End-to-End Artifact Flow
+name: Reports → Commit → Release
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
         description: "Release tag (e.g. 0.0.1)"
         required: true
       path:
-        description: "Download + commit path (e.g. reports)"
+        description: "Reports path"
         required: true
         default: "reports"
 
@@ -25,14 +25,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1️⃣ Create files
+      # 1️⃣ Create files (demo)
       - name: Create files
         run: |
           mkdir -p output
-          echo '{"name":"file3"}' > output/file3.json
-          echo '{"name":"file4"}' > output/file4.json
-          echo "# File 3" > output/file3.md
-          echo "# File 4" > output/file4.md
+          echo '{"name":"file1"}' > output/file1.json
+          echo '{"name":"file2"}' > output/file2.json
+          echo "# File 1" > output/file1.md
+          echo "# File 2" > output/file2.md
 
       # 2️⃣ Upload artifact
       - name: Upload artifacts
@@ -41,65 +41,52 @@ jobs:
           name: my-artifacts
           path: output/*
 
-      # 3️⃣ Download artifact to user-provided path
+      # 3️⃣ Download into input path
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: my-artifacts
-          path: ${{ inputs.path }}
+          path: downloaded
 
-      # Debug
-      - name: List downloaded files
-        run: |
-          echo "📂 Files in ${{ inputs.path }}:"
-          ls -l ${{ inputs.path }}
+    
 
-      # 4️⃣ Commit to main
-      - name: Commit files to main
+      # 5️⃣ Commit ONLY if reports changed
+      - name: Commit reports if changed
         run: |
-          set -e
+          TARGET="${{ inputs.path }}"
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           git checkout main
 
-          git add ${{ inputs.path }}
+          git add "$TARGET"
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
+          if git diff --cached --quiet -- "$TARGET"; then
+            echo "✅ No changes in $TARGET → skipping commit"
           else
-            git commit -m "Add artifacts to ${{ inputs.path }}"
+            git commit -m "Update $TARGET for ${{ inputs.release-tag }}"
             git push origin main
+            echo "✅ Changes committed"
           fi
 
-      # 5️⃣ Upload to release
+      # 6️⃣ Upload to release
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.release-tag }}"
-          FILE_PATH="${{ inputs.path }}"
+          TARGET="${{ inputs.path }}"
 
-          echo "📦 Uploading files from '$FILE_PATH' to release '$TAG'..."
+          echo "📦 Uploading from $TARGET to release $TAG"
 
-          max_retries=3
-          count=1
-          
-          while [ $count -le $max_retries ]; do
-            echo "⬆️ Attempt $count to upload..."
-          
-            if gh release upload "$TAG" "$FILE_PATH"/* --clobber; then
-              echo "✅ Upload successful"
-              break
-            else
-              echo "⚠️ Upload failed (attempt $count)"
-              ((count++))
-              sleep 2
-            fi
-          done
-          
-          if [ $count -gt $max_retries ]; then
-            echo "❌ Upload failed after $max_retries attempts"
+          # Validate release exists
+          gh release view "$TAG" >/dev/null 2>&1 || {
+            echo "❌ Release not found"
             exit 1
-          fi
+          }
+
+          # Upload all files
+          gh release upload "$TAG" "$TARGET"/* --clobber
+
+          echo "✅ Upload completed"
