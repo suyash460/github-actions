@@ -1,0 +1,115 @@
+name: Test Artifact Upload + Commit + Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      is-release:
+        description: "Trigger release upload logic"
+        required: false
+        default: "false"
+      release-tag:
+        description: "Release tag (required if is-release=true)"
+        required: false
+      commit-path:
+        description: "Path where artifacts will be downloaded"
+        required: false
+        default: "downloaded"
+
+permissions:
+  contents: write
+
+jobs:
+  test-artifacts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Create files
+      - name: Create files
+        run: |
+          mkdir -p output
+          echo '{"name": "file1"}' > output/file1.json
+          echo '{"name": "file2"}' > output/file2.json
+          echo "# File 1" > output/file1.md
+          echo "# File 2" > output/file2.md
+
+      # Upload artifact
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: my-artifacts
+          path: output/*
+
+      # Download artifact
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: my-artifacts
+          path: ${{ github.workspace }}/${{ inputs.commit-path }}
+
+      # Debug
+      - name: List downloaded files
+        run: |
+          echo "Downloaded files:"
+          ls -R ${{ github.workspace }}/${{ inputs.commit-path }}
+
+      # ✅ Commit to main branch
+      - name: Commit files to main
+        run: |
+          set -e
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          # Ensure we are on main
+          git checkout main
+
+          # Copy downloaded files into repo root (or keep folder if you want)
+          cp -r ${{ github.workspace }}/${{ inputs.commit-path }}/* .
+
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add downloaded artifacts"
+            git push origin main
+          fi
+
+      # Your release upload logic
+      - name: Upload artifacts to GitHub Release
+        if: inputs.is-release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "${{ inputs.release-tag }}" ]; then
+            echo "❌ Error: release-tag is required when is-release is true"
+            exit 1
+          fi
+
+          echo "📋 Files available for upload:"
+          find "${GITHUB_WORKSPACE}/${{ inputs.commit-path }}" -type f -print
+
+          echo "📦 Uploading artifacts to release ${{ inputs.release-tag }}..."
+
+          uploaded_count=0
+          failed_uploads=()
+
+          while IFS= read -r -d '' file; do
+            rel_path="${file#${GITHUB_WORKSPACE}/${{ inputs.commit-path }}/}"
+
+            if gh release upload "${{ inputs.release-tag }}" "$file" --clobber; then
+              ((uploaded_count++))
+              echo "✅ Uploaded: $rel_path"
+            else
+              failed_uploads+=("$rel_path")
+              echo "❌ Failed: $rel_path"
+            fi
+          done < <(find "${GITHUB_WORKSPACE}/${{ inputs.commit-path }}" -type f -print0)
+
+          echo "Uploaded: $uploaded_count"
