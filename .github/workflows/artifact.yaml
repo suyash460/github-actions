@@ -83,13 +83,23 @@ jobs:
 
           echo "📦 Uploading files from '$FILE_PATH' to release '$TAG'..."
 
-          # Check release exists
-          gh release view "$TAG" >/dev/null 2>&1 || {
-            echo "❌ Release '$TAG' not found"
+          max_retries=3
+          count=1
+          
+          while [ $count -le $max_retries ]; do
+            echo "⬆️ Attempt $count to upload..."
+          
+            if gh release upload "$TAG" "$FILE_PATH"/* --clobber; then
+              echo "✅ Upload successful"
+              break
+            else
+              echo "⚠️ Upload failed (attempt $count)"
+              ((count++))
+              sleep 2
+            fi
+          done
+          
+          if [ $count -gt $max_retries ]; then
+            echo "❌ Upload failed after $max_retries attempts"
             exit 1
-          }
-
-          # Upload all files
-          gh release upload "$TAG" "$FILE_PATH"/* --clobber
-
-          echo "✅ Upload completed"
+          fi
