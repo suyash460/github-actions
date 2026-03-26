@@ -29,10 +29,10 @@ jobs:
       - name: Create files
         run: |
           mkdir -p output
-          echo '{"name":"file1"}' > output/file1.json
-          echo '{"name":"file2"}' > output/file2.json
-          echo "# File 1" > output/file1.md
-          echo "# File 2" > output/file2.md
+          echo '{"name":"file3"}' > output/file1.json
+          echo '{"name":"file3"}' > output/file2.json
+          echo "# File 3" > output/file1.md
+          echo "# File 4" > output/file2.md
 
       # 2️⃣ Upload artifact
       - name: Upload artifacts
